@@ -1,0 +1,17 @@
+{
+  "ASPIRIN": [
+    "Gastric haemorrhage",
+    "Chest pain",
+    "Dizziness"
+  ],
+  "IBUPROFEN": [
+    "Chest pain",
+    "Gastric haemorrhage",
+    "Headache",
+    "Nausea",
+    "Dizziness"
+  ],
+  "METFORMIN": [
+    "Nausea"
+  ]
+}
