@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Output data (keep examples/ committed; ignore local runs)
+faers_*.csv
+signals_*.csv
+
+# Streamlit
+.streamlit/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+
+# 运行时产物
+exports/
+logs/
+
+# 内嵌 Python 运行环境（约 400MB，属分发产物，不进仓库）
+python/

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAERS 信号检测 · 操作 SOP</title>
+<style>
+  :root{
+    --ink:#1f2933; --sub:#52606d; --line:#e4e7eb; --accent:#1a56db;
+    --strong:#c81e1e; --mid:#c2410c; --weak:#b45309; --bg:#ffffff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+       color:var(--ink); background:#f5f7fa; padding:24px; line-height:1.55;}
+  .page{max-width:840px; margin:0 auto; background:var(--bg);
+        padding:34px 40px; box-shadow:0 1px 4px rgba(0,0,0,.08); border-radius:6px;}
+  header{border-bottom:3px solid var(--accent); padding-bottom:14px; margin-bottom:18px;}
+  h1{font-size:21px; color:var(--accent); letter-spacing:.5px;}
+  .sub{font-size:13px; color:var(--sub); margin-top:6px;}
+  .meta{font-size:12px; color:var(--sub); margin-top:8px; display:flex; gap:18px; flex-wrap:wrap;}
+  h2{font-size:15px; color:var(--accent); margin:22px 0 8px;
+     border-left:4px solid var(--accent); padding-left:8px;}
+  h3{font-size:13.5px; color:var(--ink); margin:12px 0 4px;}
+  p,li{font-size:13px; color:var(--ink);}
+  ul,ol{margin:4px 0 4px 20px;} li{margin:4px 0;}
+  .step{counter-reset:step;} .step li{list-style:none; position:relative; padding-left:30px; margin:8px 0;}
+  .step li::before{counter-increment:step; content:counter(step); position:absolute; left:0; top:0;
+     background:var(--accent); color:#fff; width:20px; height:20px; border-radius:50%;
+     display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;}
+  code{background:#eef1f4; padding:2px 6px; border-radius:4px; font-size:12px; color:#0b3d91;}
+  pre{background:#0f1b2d; color:#e6edf3; padding:12px 14px; border-radius:6px;
+      font-size:12px; overflow-x:auto; margin:8px 0; line-height:1.5;}
+  pre code{background:none; color:inherit; padding:0;}
+  table{width:100%; border-collapse:collapse; margin-top:8px; font-size:12.5px;}
+  th,td{border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top;}
+  th{background:#f0f4ff; color:var(--accent); font-weight:600;}
+  .tag{display:inline-block; padding:1px 8px; border-radius:10px; color:#fff; font-size:11px; font-weight:600;}
+  .s-strong{background:var(--strong);} .s-mid{background:var(--mid);} .s-weak{background:var(--weak);}
+  .box{border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:4px;
+       padding:10px 14px; background:#fbfcfe; margin:8px 0;}
+  .warn{border-left-color:var(--strong); background:#fdf3f3;}
+  .foot{margin-top:20px; padding-top:10px; border-top:1px solid var(--line);
+        font-size:10.5px; color:var(--sub);}
+  @media print{body{background:#fff; padding:0;} .page{box-shadow:none; padding:18px 22px;}}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>FAERS 不良反应信号检测 · 操作 SOP</h1>
+    <div class="sub">怎么跑 · 怎么判读 · 怎么归档 — 配套《临床研发药物警戒业务说明》</div>
+    <div class="meta">
+      <span>归属：临床研发部 / 药物警戒</span>
+      <span>版本：v1.0（演示版）</span>
+      <span>适用：已上市品种重点监测 / 月度自检</span>
+    </div>
+  </header>
+
+  <h2>1. 目的与范围</h2>
+  <p>规范使用 FAERS 信号检测流水线（取数 → 信号检测 → 交互展示）对指定药品开展<b>自发报告库不成比例分析</b>，
+  统一「运行、判读、归档」三步动作，使初筛结果可复现、可追溯、可交接。本 SOP 仅覆盖<b>工具操作层面</b>；
+  任何安全性结论仍须由药物警戒 qualified person 在 PV QMS 框架内判定。</p>
+
+  <h2>2. 角色与职责</h2>
+  <table>
+    <tr><th style="width:22%">角色</th><th>职责</th></tr>
+    <tr><td><b>PV 操作员</b></td><td>按本 SOP 运行工具、导出榜单、填写《信号检测记录表》、初步标注。</td></tr>
+    <tr><td><b>PV 复核人 / QP</b></td><td>对强 / 中信号做专业判读，决定是否升级为正式信号、是否进入 PSUR/RMP 或上报。</td></tr>
+    <tr><td><b>临床研发负责人</b></td><td>接收月度汇总，用于品种安全性定位与申报沟通决策。</td></tr>
+  </table>
+
+  <h2>3. 前置准备（一次性）</h2>
+  <ol>
+    <li>环境：本机装好 Python 3.9+，联网可访问 <code>api.fda.gov</code>。</li>
+    <li>安装依赖（项目根目录执行）：
+      <pre><code>pip install -r requirements.txt</code></pre>
+      依赖含 streamlit / requests / pandas / matplotlib。</li>
+    <li>确认四个脚本就位：<code>faers_openfda_ingest.py</code>、<code>faers_signal_detection.py</code>、
+      <code>severity_model.ipynb</code>、<code>streamlit_faers_app.py</code>。</li>
+  </ol>
+
+  <h2>4. 怎么跑（两种入口）</h2>
+
+  <h3>方式 A — Streamlit 交互（推荐日常使用）</h3>
+  <pre><code>streamlit run streamlit_faers_app.py</code></pre>
+  <ol class="step">
+    <li>浏览器打开本地地址，在「药品通用名」输入<b>大写</b>英文名（如 <code>ASPIRIN</code>）。</li>
+    <li>来源选「自动发现」（零前置数据，自动取该药报告频次最高的反应词）；或上传取数 CSV / 手动粘贴反应词。</li>
+    <li>设置时间窗（默认 2022-01-01 ~ 2026-12-31）与候选词数量，点「开始检测」。</li>
+    <li>等待进度条完成，查看 Top 信号榜（条形图 + 明细表），点「下载 CSV」。</li>
+  </ol>
+
+  <h3>方式 B — 命令行（批量 / 留痕）</h3>
+  <pre><code># 从取数 CSV 自动提取候选词（推荐，结果最稳）
+python faers_signal_detection.py --drug ASPIRIN --csv faers_aspirin.csv --top_terms 25
+
+# 或显式指定反应词（快速验证）
+python faers_signal_detection.py --drug ASPIRIN --reactions "Gastric haemorrhage;Headache;Nausea"
+
+# 如需先拉取原始报告（取数层）
+python faers_openfda_ingest.py --drug ASPIRIN --max 2000 --date_from 2023-01-01</code></pre>
+  <p class="note">输出：<code>signals_&lt;drug&gt;.csv</code> + 控制台 Top 榜。限速：匿名约 40 次/分；填 <code>--api_key</code> 可放宽。</p>
+
+  <h2>5. 怎么判读</h2>
+
+  <h3>5.1 三个指标看什么</h3>
+  <table>
+    <tr><th>指标</th><th>含义</th><th>怎么看</th></tr>
+    <tr><td><b>ROR</b><br>报告比值比</td><td>该药报告某反应的比值，相对「其他药报告该反应」的倍数。</td>
+      <td>值越大越异常；<b>95%CI 下限 &gt; 1</b> 才有统计意义。</td></tr>
+    <tr><td><b>PRR</b><br>比例报告比</td><td>经典「比例报告比」。</td>
+      <td>PRR ≥ 2 <b>且</b> χ² ≥ 4 <b>且</b> a ≥ 3 才达标。</td></tr>
+    <tr><td><b>IC</b><br>贝叶斯信息分量</td><td>BCPNN 的信息增益，对稀疏数据稳健。</td>
+      <td><b>IC025 &gt; 0</b> 视为信号（下限为正才稳）。</td></tr>
+  </table>
+
+  <h3>5.2 强度分级（自动打标）</h3>
+  <p>
+    <span class="tag s-strong">强 · 3/3</span> 三指标全中，关联最稳健，优先复核；
+    <span class="tag s-mid">中 · 2/3</span> 两项达标，需结合临床判断；
+    <span class="tag s-weak">弱 · 1/3</span> 仅一项，多为噪声或弱关联，一般仅记录。
+  </p>
+
+  <h3>5.3 判读红线（必读）</h3>
+  <div class="box warn">
+    <ul>
+      <li><b>关联 ≠ 因果。</b>FAERS 是自发报告库，信号只说明「该反应被报告得异常多」，不证明是药物所致。</li>
+      <li><b>频次高 ≠ 重要。</b>头痛/恶心等常见非特异性反应常呈中信号，临床意义需结合说明书与医学知识。</li>
+      <li><b>人群偏倚。</b>数据以欧美为主，结论需结合中国人群与国内 ADR 监测数据再下判断。</li>
+      <li><b>a &lt; 3 不判信号。</b>样本过少时任何指标都不可靠，直接记为「数据不足」。</li>
+    </ul>
+  </div>
+
+  <h3>5.4 判读 Checklist（复核人用）</h3>
+  <ol>
+    <li>□ 强信号：是否已有说明书 / 标签警示？无 → 标记「新安全信息」。</li>
+    <li>□ 中信号：是否已知类别反应（如该类药共性）？是 → 降权记录。</li>
+    <li>□ 是否与国内 ADR、文献、竞品数据交叉印证？一致 → 提升置信度。</li>
+    <li>□ 是否影响在研 / 在市品种的安全性定位或沟通策略？是 → 升级。</li>
+  </ol>
+
+  <h2>6. 怎么归档</h2>
+  <h3>6.1 归档物</h3>
+  <ul>
+    <li><b>原始输出</b>：<code>signals_&lt;drug&gt;.csv</code>（完整四指标 + 强度）。</li>
+    <li><b>可视化</b>：Streamlit 榜单截图（含药品名、时间窗、运行日期）。</li>
+    <li><b>复核记录</b>：《信号检测记录表》一行（见下），含复核人签字 / 系统留痕。</li>
+  </ul>
+  <h3>6.2 命名与存放</h3>
+  <pre><code>PV/信号检测/&lt;年份&gt;/&lt;YYYYMMDD&gt;_&lt;DRUG&gt;_FAERS_signals.csv
+PV/信号检测/&lt;年份&gt;/&lt;YYYYMMDD&gt;_&lt;DRUG&gt;_FAERS_记录表.xlsx</code></pre>
+  <h3>6.3 《信号检测记录表》字段</h3>
+  <table>
+    <tr><th>字段</th><th>说明</th></tr>
+    <tr><td>运行日期 / 操作员</td><td>谁、何时跑的</td></tr>
+    <tr><td>药品 / 时间窗 / 来源</td><td>自动发现 or CSV or 手动</td></tr>
+    <tr><td>Top 信号及强度</td><td>强/中/弱 + 关键指标</td></tr>
+    <tr><td>复核结论</td><td>噪声 / 已知 / 新信息 / 升级</td></tr>
+    <tr><td>后续动作</td><td>进入 PSUR / 上报 / 持续监测 / 关闭</td></tr>
+  </table>
+
+  <h2>7. 频率与触发</h2>
+  <ul>
+    <li><b>月度自检</b>：对本团队负责的重点监测品种各跑一次，更新记录表。</li>
+    <li><b>事件触发</b>：竞品 / 同类品种出现新强信号、说明书修订窗口、CDE 沟通前，临时加跑。</li>
+  </ul>
+
+  <div class="foot">
+    本 SOP 为操作层面规范，不构成医学结论或监管承诺；所有安全性结论须由 qualified person
+    在持有人药物警戒体系（PV QMS）内结合完整证据链判定。数据来源：FDA openFDA（公开、免费、免授权）。
+  </div>
+
+</div>
+</body>
+</html>
