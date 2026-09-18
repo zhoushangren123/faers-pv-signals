@@ -1,0 +1,89 @@
+name: FAERS Signal Detection
+
+# 两步流水线：
+#   1) detect  —— 对监测品种跑不成比例分析，结果以 artifact 留存；
+#   2) report  —— 汇总各品种结果为 Markdown 月报，并自动提交到 reports/。
+# 触发：①每月 1 号 06:00 UTC 定时；②Actions 页面手动 Run workflow；
+#      ③改了检测脚本/报告脚本/依赖/workflow 本身并 push 到 main/master。
+on:
+  schedule:
+    - cron: '0 6 1 * *'
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'faers_signal_detection.py'
+      - 'scripts/build_report.py'
+      - 'requirements.txt'
+      - '.github/workflows/signal-detection.yml'
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    # 需要监测的品种在此扩展（大写通用名）
+    strategy:
+      fail-fast: false
+      matrix:
+        drug:
+          - ASPIRIN
+          - IBUPROFEN
+          - METFORMIN
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run signal detection (${{ matrix.drug }})
+        env:
+          OPENFDA_API_KEY: ${{ secrets.OPENFDA_API_KEY }}
+        run: |
+          python faers_signal_detection.py \
+            --drug "${{ matrix.drug }}" \
+            --reactions "Chest pain;Headache;Nausea;Gastric haemorrhage;Dizziness" \
+            --top_signals 20 \
+            --out "signals_${{ matrix.drug }}.csv"
+
+      - name: Print summary
+        run: |
+          echo "=== ${{ matrix.drug }} Top signals ==="
+          head -n 6 "signals_${{ matrix.drug }}.csv"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signals-${{ matrix.drug }}
+          path: signals_${{ matrix.drug }}.csv
+          retention-days: 90
+
+  report:
+    needs: detect
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 自动提交月报到 reports/
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all detection artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Build monthly Markdown report
+        run: python3 scripts/build_report.py --in-dir artifacts --out-dir reports
+
+      - name: Commit report to reports/
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: FAERS 月度信号月报"
+          file_pattern: "reports/*"
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
